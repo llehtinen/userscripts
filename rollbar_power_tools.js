@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Rollbar power tools
 // @namespace    http://tampermonkey.net/
-// @version      0.1
+// @version      0.2
 // @description  Buttons that make working with Rollbar easier
 // @author       llehtinen
 // @match        https://rollbar.com/*/*/items/*/*
@@ -31,7 +31,11 @@
     exceptionSearch.on('click', function(e) {
         var div = $(this).parent();
         var arr = div.text().trim().split("\n");
-        var query = "exception:" + arr[0].trim().replace(':', '') + " " + arr[1].trim()
+        var originalTitle = arr[0].trim() + " " + arr[1].trim();
+        // rollbar max length of searchable item title is 256
+        var truncated = originalTitle.substring(0, Math.min(originalTitle.length, 255));
+        truncated = truncated.replace(arr[0].trim(), '');
+        var query = "exception:" + arr[0].trim().replace(':', '') + " " + truncated;
         search(query);
     });
     $('div.exception').find('br').remove(); // button on same row
@@ -40,7 +44,7 @@
     //----------------------------------------------------------------
     // Add button next to each line to search for the file and method
     //----------------------------------------------------------------
-    var fileSearch = $('<button>Search</button>');
+    var fileSearch = $('<button class="script-btn">Search</button>');
     fileSearch.on('click', function(e) {
         var parts = $(this).parent().find('span.filename').first().text().split(".");
         var file = parts[parts.length - 2];
@@ -54,7 +58,7 @@
     // Add button next to each line to copy fingerprint rule to
     // clipboard
     //----------------------------------------------------------------
-    var copyRuleBtn = $('<button style="margin-left: 5px">Copy rule</button>');
+    var copyRuleBtn = $('<button class="script-btn" style="margin-left: 5px;">Copy rule</button>');
     copyRuleBtn.on('click', function(event) {
 
         var stackNo = 0;
@@ -79,6 +83,14 @@
         var linkedFile = $(this).parent().find('.linked-filename, span.filename:nth-child(2)').first().text().split(":")[0];
         var parts = $(this).parent().find('span.filename').first().text().split(".");
         var method = parts[parts.length - 1];
+
+        // group item id
+        var itemId = 'REPLACE_WITH_GROUP_ITEM_ID'
+        if ($('.svgicon-commongroup').length) {
+            // the current item is a group item
+            itemId = window.location.pathname.match(/items\/(\d+)\//)[1]
+        }
+
         var ruleJson = `
   {
     "condition": {
@@ -101,7 +113,7 @@
         }
       ]
     },
-    "fingerprint": "group-item-REPLACE_WITH_ITEM_ID"
+    "fingerprint": "group-item-${itemId}"
   }
 `;
         navigator.clipboard.writeText(ruleJson);
@@ -158,7 +170,6 @@
         var match = window.location.pathname.match(/\/[^\/]+\/([^\/]+)\/items/)
         var rollbarProject = match[1];
         var jiraProps = jiraProperties[rollbarProject];
-        console.log(jiraProperties, rollbarProject, jiraProps);
         if (jiraProps) {
             // create new issue
             var occurrencesLink = window.location.origin + window.location.pathname + '?item_page=0&item_count=100&#instances';
